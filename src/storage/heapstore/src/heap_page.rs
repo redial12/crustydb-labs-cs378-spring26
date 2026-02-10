@@ -15,6 +15,7 @@ pub trait HeapPage {
     fn delete_value(&mut self, slot_id: SlotId) -> Option<()>;
     fn get_header_size(&self) -> usize;
     fn get_free_space(&self) -> usize;
+    fn get_num_slots(&self) -> u16;
 
     //Add function signatures for any helper function you need here
 }
@@ -53,7 +54,8 @@ impl HeapPage for Page {
     /// Will be used by tests.
     #[allow(dead_code)]
     fn get_header_size(&self) -> usize {
-      let num_slots: u16 = u16::from_le_bytes(self.data[2..4].try_into().unwrap());
+      let num_slots = self.get_num_slots();
+      // slots are currently 6 bytes but idk what to use 2 bytes for
       8 + (6 * num_slots) as usize
     }
 
@@ -62,7 +64,21 @@ impl HeapPage for Page {
     /// Will be used by tests.
     #[allow(dead_code)]
     fn get_free_space(&self) -> usize {
-        todo!("Your code here")
+        // start with page size, subtract header
+        let mut free_space = PAGE_SIZE - self.get_header_size();
+        // iterate through slot metadata to subtract slot lengths
+        for i in 0..self.get_num_slots() {
+          // last 2 bytes added is to skip to size from offset in slot metadata
+          let slot_size_offset = (8 + (i * 6) + 2) as usize;
+          let slot_size = u16::from_le_bytes(self.data[slot_size_offset..slot_size_offset+2].try_into().unwrap());
+          free_space -= slot_size as usize;
+        }
+
+        free_space
+    }
+
+    fn get_num_slots(&self) -> u16 {
+      u16::from_le_bytes(self.data[2..4].try_into().unwrap())
     }
 }
 
