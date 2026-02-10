@@ -53,7 +53,8 @@ impl HeapPage for Page {
     /// Will be used by tests.
     #[allow(dead_code)]
     fn get_header_size(&self) -> usize {
-        todo!("Your code here")
+      let num_slots: u16 = u16::from_le_bytes(self.data[2..4].try_into().unwrap());
+      8 + (6 * num_slots) as usize
     }
 
     /// A utility function to determine the total current free space in the page.
