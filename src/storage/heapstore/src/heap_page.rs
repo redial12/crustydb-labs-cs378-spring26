@@ -2,6 +2,7 @@ use crate::page;
 use crate::page::{Offset, Page};
 use common::prelude::*;
 use common::PAGE_SIZE;
+use core::num;
 use std::fmt;
 use std::fmt::Write;
 // todo!("Add any other imports you need here")
@@ -94,7 +95,28 @@ impl HeapPage for Page {
 
     /// Return the bytes for the slotId. If the slotId is not valid then return None
     fn get_value(&self, slot_id: SlotId) -> Option<Vec<u8>> {
-        todo!("Your code here")
+
+        // check if slotId is too great
+        let num_slots = self.get_num_slots();
+        if slot_id > num_slots { return None }
+
+        // get the offset and length of slot
+        let slot_offset_offset = 8 + (slot_id * 6) as usize;
+        let slot_size_offset = slot_offset_offset + 2;
+
+        // get offset
+        let offset = Offset::from_le_bytes(self.data[slot_offset_offset..slot_size_offset].try_into().unwrap());
+        // get size
+        let size = u16::from_le_bytes(self.data[slot_size_offset..slot_size_offset+2].try_into().unwrap()) as usize;
+
+        // check if deleted slot
+        if offset == 0 && size == 0 { return None }
+
+        let start = PAGE_SIZE - (offset as usize) - (size);
+
+        let vec = Vec::from(&self.data[start..start+size]);
+
+        Some(vec)
     }
 
     /// Delete the bytes/slot for the slotId. If the slotId is not valid then return None
