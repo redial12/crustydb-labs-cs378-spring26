@@ -33,7 +33,63 @@ impl HeapPage for Page {
     /// They must have the same size.
     /// self.data[X..y].clone_from_slice(&bytes);
     fn add_value(&mut self, bytes: &[u8]) -> Option<SlotId> {
-        todo!("Your code here")
+
+        // get free space offset
+        let mut free_offset = Offset::from_le_bytes(self.data[4..6].try_into().unwrap());
+
+        let mut num_slots = self.get_num_slots();
+
+        // look for empty slot (0, 0) or make a new one
+        let mut slot_id: SlotId = 0;
+
+        for i in 0..num_slots {
+          // last 2 bytes added is to skip to size from offset in slot metadata
+          let slot_offset_offset = 8 + (i * 6) as usize;
+          let slot_size_offset = slot_offset_offset + 2;
+          let slot_size = u16::from_le_bytes(self.data[slot_size_offset..slot_size_offset+2].try_into().unwrap());
+          let slot_offset = Offset::from_le_bytes(self.data[slot_offset_offset..slot_size_offset].try_into().unwrap());
+          
+          if slot_size == 0 && slot_size_offset == 0 {
+            break;
+          }
+
+          slot_id += 1;
+        }
+
+        // check if slot is being re-used for free space check
+        let slot_reused = slot_id < num_slots;
+
+        // check if there is enough free space
+        let mut space_required = bytes.len();
+        if !slot_reused { space_required += 6; }
+        if space_required > self.get_free_space() {
+          return None
+        }
+
+        // check for compaction before writing anything...
+
+        // make the actual slot
+        let slot_offset_offset = 8 + (slot_id * 6) as usize;
+        let slot_size_offset = slot_offset_offset + 2;
+
+        // - write offset
+        self.data[slot_offset_offset..slot_size_offset].copy_from_slice(&free_offset.to_le_bytes());
+        // - write size
+        self.data[slot_size_offset..slot_size_offset+2].copy_from_slice(&(bytes.len() as u16).to_le_bytes());
+
+        // insert tuple data
+        let start = PAGE_SIZE - (free_offset as usize) - bytes.len();
+        self.data[start..start+bytes.len()].copy_from_slice(&bytes);
+
+        // increment slot number metadata if slot not re-used at end
+        if !slot_reused {num_slots += 1}
+        self.data[2..4].copy_from_slice(&num_slots.to_le_bytes());
+
+        // increment free space offset
+        free_offset += bytes.len() as Offset;
+        self.data[4..6].copy_from_slice(&free_offset.to_le_bytes());
+
+        Some(slot_id)
     }
 
     /// Return the bytes for the slotId. If the slotId is not valid then return None
