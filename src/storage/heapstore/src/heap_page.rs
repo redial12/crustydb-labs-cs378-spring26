@@ -19,6 +19,7 @@ pub trait HeapPage {
     fn get_num_slots(&self) -> u16;
 
     //Add function signatures for any helper function you need here
+    fn compaction(&mut self);
 }
 
 impl HeapPage for Page {
@@ -67,7 +68,12 @@ impl HeapPage for Page {
           return None
         }
 
-        // check for compaction before writing anything...
+        // compact only if the contiguous gap won't fit space_required but total free space will
+        let contiguous_free = PAGE_SIZE - free_offset as usize - self.get_header_size();
+        if space_required > contiguous_free {
+            self.compaction();
+            free_offset = Offset::from_le_bytes(self.data[4..6].try_into().unwrap());
+        }
 
         // make the actual slot
         let slot_offset_offset = 8 + (slot_id * 6) as usize;
@@ -179,6 +185,61 @@ impl HeapPage for Page {
 
     fn get_num_slots(&self) -> u16 {
       u16::from_le_bytes(self.data[2..4].try_into().unwrap())
+    }
+
+    /// Compact the data by sliding all live records toward the end of the page,
+    /// eliminating any gaps. Updates each slot's offset and the page's free_offset metadata.
+    fn compaction(&mut self) {
+        let num_slots = self.get_num_slots();
+
+        // collect live slots: (slot_id, offset, size)
+        let mut live: Vec<(SlotId, Offset, usize)> = (0..num_slots)
+            .filter_map(|i| {
+                let slot_offset_offset = (8 + (i * 6)) as usize;
+                let slot_size_offset = slot_offset_offset + 2;
+                let offset = Offset::from_le_bytes(
+                    self.data[slot_offset_offset..slot_size_offset].try_into().unwrap(),
+                );
+                let size = u16::from_le_bytes(
+                    self.data[slot_size_offset..slot_size_offset + 2].try_into().unwrap(),
+                ) as usize;
+                if size == 0 && offset == 0 {
+                    None
+                } else {
+                    Some((i, offset, size))
+                }
+            })
+            .collect();
+
+        // sort by offset descending
+        live.sort_by(|a, b| b.1.cmp(&a.1));
+
+        // compact records from the end of the page
+        let mut new_offset: Offset = 0;
+        for (slot_id, old_offset, size) in live {
+            let old_start = PAGE_SIZE - (old_offset as usize) - size;
+            let new_start = PAGE_SIZE - (new_offset as usize) - size;
+
+            // move bytes if the position actually changed
+            if old_start != new_start {
+                self.data.copy_within(old_start..old_start + size, new_start);
+                // zero out old location if it doesn't overlap new location
+                if old_start > new_start + size || new_start > old_start + size {
+                    self.data[old_start..old_start + size].fill(0);
+                }
+            }
+
+            // update slot metadata with new offset
+            let slot_offset_offset = (8 + (slot_id * 6)) as usize;
+            let slot_size_offset = slot_offset_offset + 2;
+            self.data[slot_offset_offset..slot_size_offset]
+                .copy_from_slice(&new_offset.to_le_bytes());
+
+            new_offset += size as Offset;
+        }
+
+        // update free_offset to reflect compact data
+        self.data[4..6].copy_from_slice(&new_offset.to_le_bytes());
     }
 }
 
