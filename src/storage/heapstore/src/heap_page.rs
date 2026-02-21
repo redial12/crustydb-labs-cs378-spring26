@@ -50,7 +50,7 @@ impl HeapPage for Page {
           let slot_size = u16::from_le_bytes(self.data[slot_size_offset..slot_size_offset+2].try_into().unwrap());
           let slot_offset = Offset::from_le_bytes(self.data[slot_offset_offset..slot_size_offset].try_into().unwrap());
           
-          if slot_size == 0 && slot_size_offset == 0 {
+          if slot_size == 0 && slot_offset == 0 {
             break;
           }
 
@@ -124,7 +124,29 @@ impl HeapPage for Page {
     /// The space for the value should be free to use for a later added value.
     /// HINT: Return Some(()) for a valid delete
     fn delete_value(&mut self, slot_id: SlotId) -> Option<()> {
-        todo!("Your code here")
+
+        // check if slotId is too great
+        let num_slots = self.get_num_slots();
+        if slot_id > num_slots { return None }
+
+        // get the offset and length of slot
+        let slot_offset_offset = 8 + (slot_id * 6) as usize;
+        let slot_size_offset = slot_offset_offset + 2;
+
+        // get offset
+        let offset = Offset::from_le_bytes(self.data[slot_offset_offset..slot_size_offset].try_into().unwrap());
+        // get size
+        let size = u16::from_le_bytes(self.data[slot_size_offset..slot_size_offset+2].try_into().unwrap()) as usize;
+
+        // set slot offset and size to 0
+        self.data[slot_offset_offset..slot_size_offset].fill(0);
+        self.data[slot_size_offset..slot_size_offset+2].fill(0);
+
+        // set data to 0
+        let start = PAGE_SIZE - (offset as usize) - (size);
+        self.data[start..start+size].fill(0);
+
+        Some(())
     }
 
     /// A utility function to determine the size of the header in the page
