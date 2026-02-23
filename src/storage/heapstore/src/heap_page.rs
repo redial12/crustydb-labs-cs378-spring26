@@ -212,7 +212,7 @@ impl HeapPage for Page {
             .collect();
 
         // sort by offset descending
-        live.sort_by(|a, b| b.1.cmp(&a.1));
+        live.sort_by(|a, b| a.1.cmp(&b.1));
 
         // compact records from the end of the page
         let mut new_offset: Offset = 0;
@@ -247,7 +247,7 @@ impl HeapPage for Page {
 /// This should iterate through all valid values of the page.
 pub struct HeapPageIntoIter {
     page: Page,
-    // todo!("Add any fields you need here")
+    current_slot: SlotId,
 }
 
 /// The implementation of the (consuming) page iterator.
@@ -257,7 +257,15 @@ impl Iterator for HeapPageIntoIter {
     type Item = (Vec<u8>, SlotId);
 
     fn next(&mut self) -> Option<Self::Item> {
-        todo!("Your code here")
+        let num_slots = self.page.get_num_slots();
+        while self.current_slot < num_slots {
+            let slot_id = self.current_slot;
+            self.current_slot += 1;
+            if let Some(bytes) = self.page.get_value(slot_id) {
+                return Some((bytes, slot_id));
+            }
+        }
+        None
     }
 }
 
@@ -269,7 +277,7 @@ impl IntoIterator for Page {
     type IntoIter = HeapPageIntoIter;
 
     fn into_iter(self) -> Self::IntoIter {
-        todo!("Your code here")
+        HeapPageIntoIter { page: self, current_slot: 0 }
     }
 }
 
