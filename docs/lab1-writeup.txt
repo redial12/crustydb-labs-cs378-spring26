@@ -1,0 +1,12 @@
+The design decisions I made started with the metadata associated with a page.
+I decided to use 8 bytes for the page header metadata, in which
+is stored the PageID, # of slots, and free space offset. For each slot,
+I'm using allocating 6 bytes even though I'm just using 4 bytes for offset and size.
+My solution only reclaims space when there is enough space for an insert, but compaction
+is necessary. I chose this because in most cases, there will be fast inserts but
+an occasional slow one due to compaction.
+
+I spent roughly 8 hours on this assignment from looking on my code time
+extension. I think a large majority was thinking about design. What I liked about the lab
+is that it's very relevant to what we're studying in class and after studying for the quiz,
+I felt more confident in completing the lab.
