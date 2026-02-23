@@ -45,9 +45,7 @@ impl Page {
     /// (the example is for a u16 type and the data store in little endian)
     /// u16::from_le_bytes(data[X..Y].try_into().unwrap());
     pub fn get_page_id(&self) -> PageId {
-        let page_id = u16::from_le_bytes(self.data[0..2].try_into().unwrap());
-
-        page_id
+        u16::from_le_bytes(self.data[0..2].try_into().unwrap())
     }
 
     /// Create a page from a byte array

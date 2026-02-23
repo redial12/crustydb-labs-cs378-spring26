@@ -96,7 +96,7 @@ impl HeapPage for Page {
 
         // insert tuple data
         let start = PAGE_SIZE - (free_offset as usize) - bytes.len();
-        self.data[start..start + bytes.len()].copy_from_slice(&bytes);
+        self.data[start..start + bytes.len()].copy_from_slice(bytes);
 
         // increment slot number metadata if slot not re-used at end
         if !slot_reused {
