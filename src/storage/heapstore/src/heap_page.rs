@@ -16,7 +16,7 @@ pub trait HeapPage {
     fn delete_value(&mut self, slot_id: SlotId) -> Option<()>;
     fn get_header_size(&self) -> usize;
     fn get_free_space(&self) -> usize;
-    fn get_num_slots(&self) -> u16;
+    fn get_num_slots(&self) -> SlotId;
 
     //Add function signatures for any helper function you need here
     fn compaction(&mut self);
@@ -35,7 +35,6 @@ impl HeapPage for Page {
     /// They must have the same size.
     /// self.data[X..y].clone_from_slice(&bytes);
     fn add_value(&mut self, bytes: &[u8]) -> Option<SlotId> {
-
         // get free space offset
         let mut free_offset = Offset::from_le_bytes(self.data[4..6].try_into().unwrap());
 
@@ -45,17 +44,25 @@ impl HeapPage for Page {
         let mut slot_id: SlotId = 0;
 
         for i in 0..num_slots {
-          // last 2 bytes added is to skip to size from offset in slot metadata
-          let slot_offset_offset = 8 + (i * 6) as usize;
-          let slot_size_offset = slot_offset_offset + 2;
-          let slot_size = u16::from_le_bytes(self.data[slot_size_offset..slot_size_offset+2].try_into().unwrap());
-          let slot_offset = Offset::from_le_bytes(self.data[slot_offset_offset..slot_size_offset].try_into().unwrap());
-          
-          if slot_size == 0 && slot_offset == 0 {
-            break;
-          }
+            // last 2 bytes added is to skip to size from offset in slot metadata
+            let slot_offset_offset = 8 + (i * 6) as usize;
+            let slot_size_offset = slot_offset_offset + 2;
+            let slot_size = u16::from_le_bytes(
+                self.data[slot_size_offset..slot_size_offset + 2]
+                    .try_into()
+                    .unwrap(),
+            );
+            let slot_offset = Offset::from_le_bytes(
+                self.data[slot_offset_offset..slot_size_offset]
+                    .try_into()
+                    .unwrap(),
+            );
 
-          slot_id += 1;
+            if slot_size == 0 && slot_offset == 0 {
+                break;
+            }
+
+            slot_id += 1;
         }
 
         // check if slot is being re-used for free space check
@@ -63,9 +70,11 @@ impl HeapPage for Page {
 
         // check if there is enough free space
         let mut space_required = bytes.len();
-        if !slot_reused { space_required += 6; }
+        if !slot_reused {
+            space_required += 6;
+        }
         if space_required > self.get_free_space() {
-          return None
+            return None;
         }
 
         // compact only if the contiguous gap won't fit space_required but total free space will
@@ -82,14 +91,17 @@ impl HeapPage for Page {
         // - write offset
         self.data[slot_offset_offset..slot_size_offset].copy_from_slice(&free_offset.to_le_bytes());
         // - write size
-        self.data[slot_size_offset..slot_size_offset+2].copy_from_slice(&(bytes.len() as u16).to_le_bytes());
+        self.data[slot_size_offset..slot_size_offset + 2]
+            .copy_from_slice(&(bytes.len() as u16).to_le_bytes());
 
         // insert tuple data
         let start = PAGE_SIZE - (free_offset as usize) - bytes.len();
-        self.data[start..start+bytes.len()].copy_from_slice(&bytes);
+        self.data[start..start + bytes.len()].copy_from_slice(&bytes);
 
         // increment slot number metadata if slot not re-used at end
-        if !slot_reused {num_slots += 1}
+        if !slot_reused {
+            num_slots += 1
+        }
         self.data[2..4].copy_from_slice(&num_slots.to_le_bytes());
 
         // increment free space offset
@@ -101,26 +113,37 @@ impl HeapPage for Page {
 
     /// Return the bytes for the slotId. If the slotId is not valid then return None
     fn get_value(&self, slot_id: SlotId) -> Option<Vec<u8>> {
-
         // check if slotId is too great
         let num_slots = self.get_num_slots();
-        if slot_id > num_slots { return None }
+        if slot_id > num_slots {
+            return None;
+        }
 
         // get the offset and length of slot
         let slot_offset_offset = 8 + (slot_id * 6) as usize;
         let slot_size_offset = slot_offset_offset + 2;
 
         // get offset
-        let offset = Offset::from_le_bytes(self.data[slot_offset_offset..slot_size_offset].try_into().unwrap());
+        let offset = Offset::from_le_bytes(
+            self.data[slot_offset_offset..slot_size_offset]
+                .try_into()
+                .unwrap(),
+        );
         // get size
-        let size = u16::from_le_bytes(self.data[slot_size_offset..slot_size_offset+2].try_into().unwrap()) as usize;
+        let size = u16::from_le_bytes(
+            self.data[slot_size_offset..slot_size_offset + 2]
+                .try_into()
+                .unwrap(),
+        ) as usize;
 
         // check if deleted slot
-        if offset == 0 && size == 0 { return None }
+        if offset == 0 && size == 0 {
+            return None;
+        }
 
         let start = PAGE_SIZE - (offset as usize) - (size);
 
-        let vec = Vec::from(&self.data[start..start+size]);
+        let vec = Vec::from(&self.data[start..start + size]);
 
         Some(vec)
     }
@@ -130,27 +153,36 @@ impl HeapPage for Page {
     /// The space for the value should be free to use for a later added value.
     /// HINT: Return Some(()) for a valid delete
     fn delete_value(&mut self, slot_id: SlotId) -> Option<()> {
-
         // check if slotId is too great
         let num_slots = self.get_num_slots();
-        if slot_id > num_slots { return None }
+        if slot_id > num_slots {
+            return None;
+        }
 
         // get the offset and length of slot
         let slot_offset_offset = 8 + (slot_id * 6) as usize;
         let slot_size_offset = slot_offset_offset + 2;
 
         // get offset
-        let offset = Offset::from_le_bytes(self.data[slot_offset_offset..slot_size_offset].try_into().unwrap());
+        let offset = Offset::from_le_bytes(
+            self.data[slot_offset_offset..slot_size_offset]
+                .try_into()
+                .unwrap(),
+        );
         // get size
-        let size = u16::from_le_bytes(self.data[slot_size_offset..slot_size_offset+2].try_into().unwrap()) as usize;
+        let size = u16::from_le_bytes(
+            self.data[slot_size_offset..slot_size_offset + 2]
+                .try_into()
+                .unwrap(),
+        ) as usize;
 
         // set slot offset and size to 0
         self.data[slot_offset_offset..slot_size_offset].fill(0);
-        self.data[slot_size_offset..slot_size_offset+2].fill(0);
+        self.data[slot_size_offset..slot_size_offset + 2].fill(0);
 
         // set data to 0
         let start = PAGE_SIZE - (offset as usize) - (size);
-        self.data[start..start+size].fill(0);
+        self.data[start..start + size].fill(0);
 
         Some(())
     }
@@ -160,9 +192,9 @@ impl HeapPage for Page {
     /// Will be used by tests.
     #[allow(dead_code)]
     fn get_header_size(&self) -> usize {
-      let num_slots = self.get_num_slots();
-      // slots are currently 6 bytes but idk what to use 2 bytes for
-      8 + (6 * num_slots) as usize
+        let num_slots = self.get_num_slots();
+        // slots are currently 6 bytes but idk what to use 2 bytes for
+        8 + (6 * num_slots) as usize
     }
 
     /// A utility function to determine the total current free space in the page.
@@ -174,17 +206,21 @@ impl HeapPage for Page {
         let mut free_space = PAGE_SIZE - self.get_header_size();
         // iterate through slot metadata to subtract slot lengths
         for i in 0..self.get_num_slots() {
-          // last 2 bytes added is to skip to size from offset in slot metadata
-          let slot_size_offset = (8 + (i * 6) + 2) as usize;
-          let slot_size = u16::from_le_bytes(self.data[slot_size_offset..slot_size_offset+2].try_into().unwrap());
-          free_space -= slot_size as usize;
+            // last 2 bytes added is to skip to size from offset in slot metadata
+            let slot_size_offset = (8 + (i * 6) + 2) as usize;
+            let slot_size = u16::from_le_bytes(
+                self.data[slot_size_offset..slot_size_offset + 2]
+                    .try_into()
+                    .unwrap(),
+            );
+            free_space -= slot_size as usize;
         }
 
         free_space
     }
 
-    fn get_num_slots(&self) -> u16 {
-      u16::from_le_bytes(self.data[2..4].try_into().unwrap())
+    fn get_num_slots(&self) -> SlotId {
+        SlotId::from_le_bytes(self.data[2..4].try_into().unwrap())
     }
 
     /// Compact the data by sliding all live records toward the end of the page,
@@ -198,10 +234,14 @@ impl HeapPage for Page {
                 let slot_offset_offset = (8 + (i * 6)) as usize;
                 let slot_size_offset = slot_offset_offset + 2;
                 let offset = Offset::from_le_bytes(
-                    self.data[slot_offset_offset..slot_size_offset].try_into().unwrap(),
+                    self.data[slot_offset_offset..slot_size_offset]
+                        .try_into()
+                        .unwrap(),
                 );
                 let size = u16::from_le_bytes(
-                    self.data[slot_size_offset..slot_size_offset + 2].try_into().unwrap(),
+                    self.data[slot_size_offset..slot_size_offset + 2]
+                        .try_into()
+                        .unwrap(),
                 ) as usize;
                 if size == 0 && offset == 0 {
                     None
@@ -222,7 +262,8 @@ impl HeapPage for Page {
 
             // move bytes if the position actually changed
             if old_start != new_start {
-                self.data.copy_within(old_start..old_start + size, new_start);
+                self.data
+                    .copy_within(old_start..old_start + size, new_start);
                 // zero out old location if it doesn't overlap new location
                 if old_start > new_start + size || new_start > old_start + size {
                     self.data[old_start..old_start + size].fill(0);
@@ -277,7 +318,10 @@ impl IntoIterator for Page {
     type IntoIter = HeapPageIntoIter;
 
     fn into_iter(self) -> Self::IntoIter {
-        HeapPageIntoIter { page: self, current_slot: 0 }
+        HeapPageIntoIter {
+            page: self,
+            current_slot: 0,
+        }
     }
 }
 
