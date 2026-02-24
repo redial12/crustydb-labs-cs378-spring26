@@ -1,4 +1,4 @@
-_Due Date: Tuesday, Feburary 24th, 2026 at 11:59 pm_
+_Due Date: Tuesday, February 24th, 2026 at 11:59 pm_
 
 Welcome to CrustyDB! CrustyDB is an academic Rust-based relational database
 management system built by [ChiData at The University of

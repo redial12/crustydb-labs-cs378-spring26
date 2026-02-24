@@ -1,4 +1,4 @@
-_Due Date: Tuesday, October 29th, 2024 at 11:59 am (Noon)_
+_Due Date: Tuesday, March 24th, 2026 at 11:59 pm_
 
 In this lab you will continue building a storage manager that uses
 heapfiles to store values/data. As a reminder, in CrustyDB the storage manager
