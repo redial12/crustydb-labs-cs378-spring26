@@ -42,7 +42,15 @@ impl StorageManager {
         _perm: Permissions,
         _pin: bool,
     ) -> Option<Page> {
-        panic!("TODO milestone hs");
+        
+        // lookup container in map to get heapfile
+        let heapfile_map = self.cid_heapfile_map.read().unwrap();
+        // return None if cid not in map
+        let heapfile = heapfile_map.get(&container_id)?;
+        // return None if error is received while reading
+        let page = heapfile.read_page_from_file(page_id).ok()?;
+
+        Some(page)
     }
 
     /// Write a page
@@ -52,12 +60,29 @@ impl StorageManager {
         page: &Page,
         _tid: TransactionId,
     ) -> Result<(), CrustyError> {
-        panic!("TODO milestone hs");
+        
+        // lookup container in map to get heapfile
+        let heapfile_map = self.cid_heapfile_map.read().unwrap();
+        // return Error if cid not in map
+        let heapfile = heapfile_map.get(&container_id).ok_or(
+          CrustyError::CrustyError(format!("Container {} not found", container_id)))?;
+        // write a page
+        heapfile.write_page_to_file(page)?;
+
+        Ok(())
     }
 
     /// Get the number of pages for a container
     fn get_num_pages(&self, container_id: ContainerId) -> PageId {
-        panic!("TODO milestone hs");
+
+        // lookup container in map to get heapfile
+        let heapfile_map = self.cid_heapfile_map.read().unwrap();
+        // return 0 if cid not in map
+        let Some(heapfile) = heapfile_map.get(&container_id) else {
+            return 0;
+        };
+        // get number of pages from heapfile
+        heapfile.num_pages()
     }
 
     /// Test utility function for counting reads and writes served by the heap file.
@@ -124,7 +149,19 @@ impl StorageTrait for StorageManager {
             }
         } else {
             debug!("Making new storage_manager in directory {:?}", storage_dir);
-            panic!("TODO milestone hs");
+
+            let hm: HashMap<ContainerId, Arc<HeapFile>> = HashMap::new();
+            let hmfiles: HashMap<ContainerId, Arc<PathBuf>> = HashMap::new();
+
+            let cid_heapfile_map = Arc::new(RwLock::new(hm));
+            let cid_path_map = Arc::new(RwLock::new(hmfiles));
+            
+            StorageManager {
+                storage_dir: storage_dir.to_path_buf(),
+                is_temp: false,
+                cid_path_map: cid_path_map,
+                cid_heapfile_map: cid_heapfile_map
+            }
         }
     }
 
@@ -133,7 +170,19 @@ impl StorageTrait for StorageManager {
     fn new_test_sm() -> Self {
         let storage_dir = gen_random_test_sm_dir();
         debug!("Making new temp storage_manager {:?}", storage_dir);
-        panic!("TODO milestone hs");
+        
+        let hm: HashMap<ContainerId, Arc<HeapFile>> = HashMap::new();
+        let hmfiles: HashMap<ContainerId, Arc<PathBuf>> = HashMap::new();
+
+        let cid_heapfile_map = Arc::new(RwLock::new(hm));
+        let cid_path_map = Arc::new(RwLock::new(hmfiles));
+            
+        StorageManager {
+            storage_dir: storage_dir.to_path_buf(),
+            is_temp: true,
+            cid_path_map: cid_path_map,
+            cid_heapfile_map: cid_heapfile_map
+        }
     }
 
     /// Insert some bytes into a container for a particular value (e.g. record).
@@ -150,7 +199,28 @@ impl StorageTrait for StorageManager {
         if value.len() > PAGE_SIZE {
             panic!("Cannot handle inserting a value larger than the page size");
         }
-        panic!("TODO milestone hs");
+
+        let heapfile = {
+            let map = self.cid_heapfile_map.read().unwrap();
+            Arc::clone(map.get(&container_id).expect("Container not found"))
+        };
+
+        // Try to insert into an existing page
+        let num_pages = heapfile.num_pages();
+        for page_id in 0..num_pages {
+            let mut page = heapfile.read_page_from_file(page_id).unwrap();
+            if let Some(slot_id) = page.add_value(&value) {
+                heapfile.write_page_to_file(&page).unwrap();
+                return ValueId::new_slot(container_id, page_id, slot_id);
+            }
+        }
+
+        // No existing page had space — create a new one
+        let new_page_id = num_pages;
+        let mut page = Page::new(new_page_id);
+        let slot_id = page.add_value(&value).expect("Failed to insert into fresh page");
+        heapfile.write_page_to_file(&page).unwrap();
+        ValueId::new_slot(container_id, new_page_id, slot_id)
     }
 
     /// Insert some bytes into a container for vector of values (e.g. record).
@@ -170,8 +240,24 @@ impl StorageTrait for StorageManager {
     }
 
     /// Delete the data for a value. If the valueID is not found it returns Ok() still.
-    fn delete_value(&self, id: ValueId, tid: TransactionId) -> Result<(), CrustyError> {
-        panic!("TODO milestone hs");
+    fn delete_value(&self, id: ValueId, _tid: TransactionId) -> Result<(), CrustyError> {
+        let (page_id, slot_id) = match (id.page_id, id.slot_id) {
+            (Some(p), Some(s)) => (p, s),
+            _ => return Ok(()),
+        };
+
+        let heapfile = {
+            let map = self.cid_heapfile_map.read().unwrap();
+            match map.get(&id.container_id) {
+                Some(hf) => Arc::clone(hf),
+                None => return Ok(()),
+            }
+        };
+
+        let mut page = heapfile.read_page_from_file(page_id)?;
+        page.delete_value(slot_id);
+        heapfile.write_page_to_file(&page)?;
+        Ok(())
     }
 
     /// Updates a value. Returns valueID on update (which may have changed). Error on failure
