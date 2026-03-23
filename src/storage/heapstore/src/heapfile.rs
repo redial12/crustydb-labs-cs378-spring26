@@ -85,8 +85,8 @@ impl HeapFile {
         
         let mut file = self.file.write().unwrap();
 
-        let page_offset: u16 = pid * (PAGE_SIZE as u16);
-        file.seek(SeekFrom::Start(page_offset as u64)).map_err(|e| {
+        let page_offset: u64 = pid as u64 * PAGE_SIZE as u64;
+        file.seek(SeekFrom::Start(page_offset)).map_err(|e| {
             CrustyError::CrustyError(format!(
                 "Failed to seek to page {} (offset {}): {}",
                 pid, page_offset, e
@@ -136,8 +136,8 @@ impl HeapFile {
             ))
           })?;
         } else {
-          let page_offset: u16 = pid * (PAGE_SIZE as u16);
-          writer.seek(SeekFrom::Start(page_offset as u64)).map_err(|e| {
+          let page_offset: u64 = pid as u64 * PAGE_SIZE as u64;
+          writer.seek(SeekFrom::Start(page_offset)).map_err(|e| {
             CrustyError::CrustyError(format!(
                 "Failed to seek to page {} (offset {}): {}",
                 pid, page_offset, e
