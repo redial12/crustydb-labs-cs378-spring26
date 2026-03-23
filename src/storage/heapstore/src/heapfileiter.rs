@@ -1,7 +1,7 @@
-use crate::heap_page::HeapPage;
 use crate::heap_page::HeapPageIntoIter;
 use crate::heapfile::HeapFile;
 use common::prelude::*;
+use std::iter::Peekable;
 use std::sync::Arc;
 
 #[allow(dead_code)]
@@ -12,7 +12,10 @@ use std::sync::Arc;
 ///
 /// HINT: This will need an Arc<HeapFile>
 pub struct HeapFileIterator {
-    //TODO milestone hs
+    hf: Arc<HeapFile>,
+    tid: TransactionId,
+    current_page_id: PageId,
+    page_iter: Option<Peekable<HeapPageIntoIter>>,
 }
 
 /// Required HeapFileIterator functions
@@ -20,11 +23,30 @@ impl HeapFileIterator {
     /// Create a new HeapFileIterator that stores the tid, and heapFile pointer.
     /// This should initialize the state required to iterate through the heap file.
     pub(crate) fn new(tid: TransactionId, hf: Arc<HeapFile>) -> Self {
-        panic!("TODO milestone hs");
+        HeapFileIterator {
+            hf,
+            tid,
+            current_page_id: 0,
+            page_iter: None,
+        }
     }
 
     pub(crate) fn new_from(tid: TransactionId, hf: Arc<HeapFile>, value_id: ValueId) -> Self {
-        panic!("TODO milestone hs");
+        let start_page = value_id.page_id.unwrap_or(0);
+        let start_slot = value_id.slot_id.unwrap_or(0);
+        let page_iter = hf.read_page_from_file(start_page).ok().map(|page| {
+            let mut iter = page.into_iter().peekable();
+            while iter.peek().map_or(false, |(_, slot)| *slot < start_slot) {
+                iter.next();
+            }
+            iter
+        });
+        HeapFileIterator {
+            hf,
+            tid,
+            current_page_id: start_page + 1,
+            page_iter,
+        }
     }
 }
 
@@ -33,6 +55,20 @@ impl HeapFileIterator {
 impl Iterator for HeapFileIterator {
     type Item = (Vec<u8>, ValueId);
     fn next(&mut self) -> Option<Self::Item> {
-        panic!("TODO milestone hs");
+        loop {
+            if let Some(ref mut iter) = self.page_iter {
+                if let Some((bytes, slot_id)) = iter.next() {
+                    let page_id = self.current_page_id - 1;
+                    let value_id = ValueId::new_slot(self.hf.container_id, page_id, slot_id);
+                    return Some((bytes, value_id));
+                }
+            }
+            if self.current_page_id >= self.hf.num_pages() {
+                return None;
+            }
+            let page = self.hf.read_page_from_file(self.current_page_id).ok()?;
+            self.current_page_id += 1;
+            self.page_iter = Some(page.into_iter().peekable());
+        }
     }
 }
