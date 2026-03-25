@@ -50,10 +50,10 @@ impl HeapFile {
                 )))
             }
         };
-        
-        Ok(HeapFile { 
-            file: Arc::new(RwLock::new(file)), 
-            container_id, 
+
+        Ok(HeapFile {
+            file: Arc::new(RwLock::new(file)),
+            container_id,
             read_count: AtomicU16::new(0),
             write_count: AtomicU16::new(0),
         })
@@ -65,7 +65,7 @@ impl HeapFile {
     pub fn num_pages(&self) -> PageId {
         let file = self.file.read().unwrap();
         let byte_len = file.metadata().unwrap().len();
-        
+
         (byte_len / PAGE_SIZE as u64) as PageId
     }
 
@@ -80,9 +80,9 @@ impl HeapFile {
         }
 
         if pid >= self.num_pages() {
-          return Err(CrustyError::CrustyError("Invalid pid given".to_owned()))
+            return Err(CrustyError::CrustyError("Invalid pid given".to_owned()));
         }
-        
+
         let mut file = self.file.write().unwrap();
 
         let page_offset: u64 = pid as u64 * PAGE_SIZE as u64;
@@ -95,10 +95,7 @@ impl HeapFile {
 
         let mut data: [u8; PAGE_SIZE] = [0; PAGE_SIZE];
         file.read_exact(&mut data).map_err(|e| {
-            CrustyError::CrustyError(format!(
-                "Failed to read page {} from heap file: {}",
-                pid, e
-            ))
+            CrustyError::CrustyError(format!("Failed to read page {} from heap file: {}", pid, e))
         })?;
 
         Ok(Page::from_bytes(data))
@@ -122,42 +119,36 @@ impl HeapFile {
         let num_pages = self.num_pages();
 
         if pid > num_pages {
-          return Err(CrustyError::CrustyError("Invalid pid given".to_owned()))
+            return Err(CrustyError::CrustyError("Invalid pid given".to_owned()));
         }
-        
+
         let mut file = self.file.write().unwrap();
         let mut writer = BufWriter::new(&mut *file);
 
         if pid == num_pages {
-          writer.seek(SeekFrom::End(0)).map_err(|e| {
-            CrustyError::CrustyError(format!(
-                "Failed to seek to page {} (end of file): {}",
-                pid, e
-            ))
-          })?;
+            writer.seek(SeekFrom::End(0)).map_err(|e| {
+                CrustyError::CrustyError(format!(
+                    "Failed to seek to page {} (end of file): {}",
+                    pid, e
+                ))
+            })?;
         } else {
-          let page_offset: u64 = pid as u64 * PAGE_SIZE as u64;
-          writer.seek(SeekFrom::Start(page_offset)).map_err(|e| {
-            CrustyError::CrustyError(format!(
-                "Failed to seek to page {} (offset {}): {}",
-                pid, page_offset, e
-            ))
-          })?;
+            let page_offset: u64 = pid as u64 * PAGE_SIZE as u64;
+            writer.seek(SeekFrom::Start(page_offset)).map_err(|e| {
+                CrustyError::CrustyError(format!(
+                    "Failed to seek to page {} (offset {}): {}",
+                    pid, page_offset, e
+                ))
+            })?;
         }
 
         writer.write_all(&page.data).map_err(|e| {
-            CrustyError::CrustyError(format!(
-                "Failed to write page {}: {}",
-                pid, e
-            ))
-          })?;
+            CrustyError::CrustyError(format!("Failed to write page {}: {}", pid, e))
+        })?;
 
         writer.flush().map_err(|e| {
-            CrustyError::CrustyError(format!(
-                "Failed to flush page {}: {}",
-                pid, e
-            ))
-          })?;
+            CrustyError::CrustyError(format!("Failed to flush page {}: {}", pid, e))
+        })?;
 
         Ok(())
     }

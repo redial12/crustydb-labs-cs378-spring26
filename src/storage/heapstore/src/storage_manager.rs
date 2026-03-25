@@ -42,7 +42,6 @@ impl StorageManager {
         _perm: Permissions,
         _pin: bool,
     ) -> Option<Page> {
-        
         // lookup container in map to get heapfile
         let heapfile_map = self.cid_heapfile_map.read().unwrap();
         // return None if cid not in map
@@ -60,12 +59,15 @@ impl StorageManager {
         page: &Page,
         _tid: TransactionId,
     ) -> Result<(), CrustyError> {
-        
         // lookup container in map to get heapfile
         let heapfile_map = self.cid_heapfile_map.read().unwrap();
         // return Error if cid not in map
-        let heapfile = heapfile_map.get(&container_id).ok_or(
-          CrustyError::CrustyError(format!("Container {} not found", container_id)))?;
+        let heapfile = heapfile_map
+            .get(&container_id)
+            .ok_or(CrustyError::CrustyError(format!(
+                "Container {} not found",
+                container_id
+            )))?;
         // write a page
         heapfile.write_page_to_file(page)?;
 
@@ -74,7 +76,6 @@ impl StorageManager {
 
     /// Get the number of pages for a container
     fn get_num_pages(&self, container_id: ContainerId) -> PageId {
-
         // lookup container in map to get heapfile
         let heapfile_map = self.cid_heapfile_map.read().unwrap();
         // return 0 if cid not in map
@@ -132,7 +133,7 @@ impl StorageTrait for StorageManager {
             let reader = fs::File::open(sm_file).expect("error opening persist config file");
             let sm: StorageManager =
                 serde_json::from_reader(reader).expect("error reading from json");
-            
+
             let mut hm: HashMap<ContainerId, Arc<HeapFile>> = HashMap::new();
             let mut hmfiles: HashMap<ContainerId, Arc<PathBuf>> = HashMap::new();
 
@@ -162,12 +163,12 @@ impl StorageTrait for StorageManager {
 
             let cid_heapfile_map = Arc::new(RwLock::new(hm));
             let cid_path_map = Arc::new(RwLock::new(hmfiles));
-            
+
             StorageManager {
                 storage_dir: storage_dir.to_path_buf(),
                 is_temp: false,
                 cid_path_map: cid_path_map,
-                cid_heapfile_map: cid_heapfile_map
+                cid_heapfile_map: cid_heapfile_map,
             }
         }
     }
@@ -177,18 +178,18 @@ impl StorageTrait for StorageManager {
     fn new_test_sm() -> Self {
         let storage_dir = gen_random_test_sm_dir();
         debug!("Making new temp storage_manager {:?}", storage_dir);
-        
+
         let hm: HashMap<ContainerId, Arc<HeapFile>> = HashMap::new();
         let hmfiles: HashMap<ContainerId, Arc<PathBuf>> = HashMap::new();
 
         let cid_heapfile_map = Arc::new(RwLock::new(hm));
         let cid_path_map = Arc::new(RwLock::new(hmfiles));
-            
+
         StorageManager {
             storage_dir: storage_dir.to_path_buf(),
             is_temp: true,
             cid_path_map: cid_path_map,
-            cid_heapfile_map: cid_heapfile_map
+            cid_heapfile_map: cid_heapfile_map,
         }
     }
 
@@ -225,7 +226,9 @@ impl StorageTrait for StorageManager {
         // No existing page had space — create a new one
         let new_page_id = num_pages;
         let mut page = Page::new(new_page_id);
-        let slot_id = page.add_value(&value).expect("Failed to insert into fresh page");
+        let slot_id = page
+            .add_value(&value)
+            .expect("Failed to insert into fresh page");
         heapfile.write_page_to_file(&page).unwrap();
         ValueId::new_slot(container_id, new_page_id, slot_id)
     }
@@ -306,7 +309,10 @@ impl StorageTrait for StorageManager {
         let hf = HeapFile::new(path.as_ref().clone(), container_id)?;
         hf_map.insert(container_id, Arc::new(hf));
         drop(hf_map);
-        self.cid_path_map.write().unwrap().insert(container_id, path);
+        self.cid_path_map
+            .write()
+            .unwrap()
+            .insert(container_id, path);
         Ok(())
     }
 
@@ -363,14 +369,22 @@ impl StorageTrait for StorageManager {
         _tid: TransactionId,
         _perm: Permissions,
     ) -> Result<Vec<u8>, CrustyError> {
-        let page_id = id.page_id.ok_or_else(|| CrustyError::CrustyError("ValueId missing page_id".to_string()))?;
-        let slot_id = id.slot_id.ok_or_else(|| CrustyError::CrustyError("ValueId missing slot_id".to_string()))?;
+        let page_id = id
+            .page_id
+            .ok_or_else(|| CrustyError::CrustyError("ValueId missing page_id".to_string()))?;
+        let slot_id = id
+            .slot_id
+            .ok_or_else(|| CrustyError::CrustyError("ValueId missing slot_id".to_string()))?;
         let heapfile = {
             let map = self.cid_heapfile_map.read().unwrap();
-            Arc::clone(map.get(&id.container_id).ok_or_else(|| CrustyError::CrustyError(format!("Container {} not found", id.container_id)))?)
+            Arc::clone(map.get(&id.container_id).ok_or_else(|| {
+                CrustyError::CrustyError(format!("Container {} not found", id.container_id))
+            })?)
         };
         let page = heapfile.read_page_from_file(page_id)?;
-        page.get_value(slot_id).ok_or_else(|| CrustyError::CrustyError(format!("Slot {} not found on page {}", slot_id, page_id)))
+        page.get_value(slot_id).ok_or_else(|| {
+            CrustyError::CrustyError(format!("Slot {} not found on page {}", slot_id, page_id))
+        })
     }
 
     fn get_storage_path(&self) -> &Path {
@@ -426,7 +440,6 @@ impl Drop for StorageManager {
         }
     }
 }
-
 
 #[cfg(test)]
 #[allow(unused_must_use)]
@@ -543,5 +556,3 @@ mod test {
         assert_eq!(1000, count);
     }
 }
-
-
