@@ -1,0 +1,11 @@
+I'm not too sure I made any significant design decisions in this part compared to lab 1. Something
+I did have to watch out for was deadlock while access variables that used the read/write lock.
+Learning more about Arc::clone and taking some extra time to determine end of life for a variable to
+lock release from shared resources helped. For the storage manager, I made use of the implementation
+I created in heapfile.rs and using the memstore as a reference while keeping in mind data here is
+stored on disk. For the heapfile iterator, I discovered peek while searching for a way to access
+the next heap page for a simple check without having to call next on it's iterator. That said, I
+also re-used the iterator we made in the last part.
+
+I'd say I spent slightly more time on this lab than the last - maybe 9-12 hours of time. I wasn't
+a huge fan of implementing the storage trait for the storage manager.
