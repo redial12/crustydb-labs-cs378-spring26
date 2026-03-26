@@ -26,6 +26,9 @@ crate. The files that you need to modify are:
 
 Please see the [handout instructions](docs/lab2-heapfile.md) for more information.
 
+## Lab 3 - Query Operators
+Check the [handout instructions](docs/lab3-operators.md) for more information.
+
 ## Running and Testing CrustyDB End-to-End
 
 Once you have completed the major milestones of CrustyDB, you can build the
