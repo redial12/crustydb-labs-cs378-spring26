@@ -7,6 +7,28 @@ Please see the [handout instructions](docs/) for more information.
 
 Implement a small project to master the fundamental skills of Rust in this file `src/minigrep/src/main.rs`. You may also need to add a file `src/minigrep/src/lib.rs` yourself. The instructions for learning Rust and finishing this project are [here](src/minigrep/README.md). 
 
+## Lab 1 - Page Lab
+
+Implement the slotted page structure in the files `src/storage/heapstore/src/page.rs` 
+and `src/storage/heapstore/src/heap_page.rs`. 
+Please see the [handout instructions](docs/lab1-heappage.md) for more information.
+
+Do not modify any other files in the repository.
+
+## Lab 2 - HeapStore Milestone
+
+Complete the implementation of the Heapstore in the `src/storage/heapstore/src`
+crate. The files that you need to modify are:
+
+- `src/storage/heapstore/src/heapfile.rs`
+- `src/storage/heapstore/src/heapfileiter.rs`
+- `src/storage/heapstore/src/storage_manager.rs`
+
+Please see the [handout instructions](docs/lab2-heapfile.md) for more information.
+
+## Lab 3 - Query Operators
+Check the [handout instructions](docs/lab3-operators.md) for more information.
+
 ## Running and Testing CrustyDB End-to-End
 
 Once you have completed the major milestones of CrustyDB, you can build the
