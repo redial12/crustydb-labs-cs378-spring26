@@ -18,6 +18,11 @@ pub struct HashEqJoin {
     right_child: Box<dyn OpIterator>,
     // States (Need to reset on close)
     // todo!("Your code here")
+    open: bool,
+    current_tuple: Option<Tuple>,
+    map: Option<HashMap<Field, Vec<Tuple>>>,
+    current_matches: Vec<Tuple>,
+    match_index: usize,
 }
 
 impl HashEqJoin {
@@ -37,30 +42,105 @@ impl HashEqJoin {
         left_child: Box<dyn OpIterator>,
         right_child: Box<dyn OpIterator>,
     ) -> Self {
-        todo!("Your code here")
+        Self {
+          managers,
+          schema,
+          left_expr,
+          right_expr,
+          left_child,
+          right_child,
+          open: false,
+          current_tuple: None,
+          map: None,
+          current_matches: Vec::new(),
+          match_index: 0,
+        }
     }
 }
 
 impl OpIterator for HashEqJoin {
     fn configure(&mut self, will_rewind: bool) {
-        self.left_child.configure(false); // left child will never be rewound by HJ
-        self.right_child.configure(will_rewind);
+        self.left_child.configure(will_rewind); // left child is rewound when HJ is rewound
+        self.right_child.configure(false); // right child is consumed once in open() to build the map
     }
 
     fn open(&mut self) -> Result<(), CrustyError> {
-        todo!("Your code here")
+        if !self.open {
+            self.left_child.open()?;
+            self.right_child.open()?;
+            self.current_tuple = self.left_child.next()?;
+            self.open = true;
+            self.map = Some(HashMap::new());
+
+            //construct hashmap from right
+
+            //iterate through right child
+            while let Some(right_tuple) = self.right_child.next()? {
+
+              //evaluate right tuple againt right_expr
+              let right_val = self.right_expr.eval(&right_tuple);
+              
+              //insert vec if empty, then append right tuple
+              self.map.as_mut().unwrap().entry(right_val).or_insert_with(Vec::new).push(right_tuple);
+            }
+
+            if let Some(left_tuple) = &self.current_tuple {
+              let left_val = self.left_expr.eval(left_tuple);
+              self.current_matches = self.map.as_mut().unwrap().get(&left_val).cloned().unwrap_or_default();
+            }
+        }
+
+        Ok(())
     }
 
     fn next(&mut self) -> Result<Option<Tuple>, CrustyError> {
-        todo!("Your code here")
+        if !self.open {
+            panic!("Iterator is not open");
+        }
+
+        loop {
+            if self.current_tuple.is_none() {
+                return Ok(None);
+            }
+
+            // Still have matches for the current left tuple
+            if self.match_index < self.current_matches.len() {
+                let left_tuple = self.current_tuple.as_ref().unwrap();
+                let right_tuple = &self.current_matches[self.match_index];
+                let t = left_tuple.merge(right_tuple);
+                self.match_index += 1;
+                return Ok(Some(t));
+            }
+
+            // current_matches exhausted — advance to next left tuple
+            self.current_tuple = self.left_child.next()?;
+            if let Some(left_tuple) = &self.current_tuple {
+                let left_val = self.left_expr.eval(left_tuple);
+                self.current_matches = self.map.as_ref().unwrap().get(&left_val).cloned().unwrap_or_default();
+            }
+            self.match_index = 0;
+        }
     }
 
     fn close(&mut self) -> Result<(), CrustyError> {
-        todo!("Your code here")
+        self.left_child.close()?;
+        self.right_child.close()?;
+        self.open = false;
+        Ok(())
     }
 
     fn rewind(&mut self) -> Result<(), CrustyError> {
-        todo!("Your code here")
+        if !self.open {
+            panic!("Iterator is not open");
+        }
+        self.left_child.rewind()?;
+        self.current_tuple = self.left_child.next()?;
+        if let Some(left_tuple) = &self.current_tuple {
+            let left_val = self.left_expr.eval(left_tuple);
+            self.current_matches = self.map.as_ref().unwrap().get(&left_val).cloned().unwrap_or_default();
+        }
+        self.match_index = 0;
+        Ok(())
     }
 
     fn get_schema(&self) -> &TableSchema {
