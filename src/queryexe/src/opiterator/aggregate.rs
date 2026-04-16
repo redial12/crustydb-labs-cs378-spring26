@@ -27,7 +27,20 @@ pub struct Aggregate {
     
     // States (Need to reset on close)
     // todo!("Your code here")
+    open: bool,
+    map: Option<HashMap<Vec<Field>, Vec<Field>>>,
+    index: usize,
 }
+
+  // thoughts: use a hash map to store mapping from groups to values
+  // map a vec of fields to a vec of fields
+  // the map needs to be built in open()
+  // check if a group exists, if so then merge fields.
+  // merge fields by iterating over the values(vec of Fields) from key and calling merge on each one
+  // if group doesnt exist already, call place_fields method (similar to merge)
+  // place_fields will handle the first insertion correctly for each Op, for Avg create an extra field for count
+
+  //for next() I need to turn the hashmap into tuples
 
 impl Aggregate {
     pub fn new(
@@ -39,7 +52,17 @@ impl Aggregate {
         child: Box<dyn OpIterator>,
     ) -> Self {
         assert!(ops.len() == agg_expr.len());
-        todo!("Your code here")
+        Self {
+          managers,
+          groupby_expr,
+          agg_expr,
+          ops,
+          schema,
+          child,
+          open: false,
+          map: None,
+          index: 0,
+        }
     }
 
     fn merge_fields(op: AggOp, field_val: &Field, acc: &mut Field) -> Result<(), CrustyError> {
@@ -76,7 +99,23 @@ impl OpIterator for Aggregate {
     }
 
     fn open(&mut self) -> Result<(), CrustyError> {
-        todo!("Your code here")
+        if !self.open {
+          self.child.open()?;
+          self.open = true;
+          self.map = Some(HashMap::new());
+        }
+
+        // construct hashmap from each tuple
+        while let Some(tuple) = self.child.next()? {
+
+          // get group by fields of tuple in vec
+          let groupby_fields: Vec<Field> = Vec::new();
+          for val in self.groupby_expr.iter(){
+            
+          }
+        }
+
+        Ok(())
     }
 
     fn next(&mut self) -> Result<Option<Tuple>, CrustyError> {
