@@ -28,8 +28,9 @@ pub struct Aggregate {
     // States (Need to reset on close)
     // todo!("Your code here")
     open: bool,
-    map: Option<HashMap<Vec<Field>, Vec<Field>>>,
+    map: HashMap<Vec<Field>, Vec<Field>>,
     index: usize,
+    ops_other: Vec<AggOp>
 }
 
   // thoughts: use a hash map to store mapping from groups to values
@@ -60,8 +61,10 @@ impl Aggregate {
           schema,
           child,
           open: false,
-          map: None,
+          map: HashMap::new(),
           index: 0,
+          ops_other: Vec::new(),
+          will_rewind: true,
         }
     }
 
@@ -86,8 +89,49 @@ impl Aggregate {
         Ok(())
     }
 
+    fn place_fields(op: AggOp, field_val: &Field) -> Field {
+      
+        match op {
+            AggOp::Count => return Field::Int(1),
+            AggOp::Max => return field_val.clone(),
+            AggOp::Min => return field_val.clone(),
+            AggOp::Sum => return field_val.clone(),
+            AggOp::Avg => return field_val.clone(),
+        }
+    }
+
     pub fn merge_tuple_into_group(&mut self, tuple: &Tuple) {
-        todo!("Your code here");
+        // get group by fields of tuple in vec
+        let mut groupby_fields: Vec<Field> = Vec::new();
+
+        for expr in self.groupby_expr.iter(){
+          let field = expr.eval(&tuple);
+          groupby_fields.push(field.clone());
+        }
+
+        // get agg fields of tuple in vec
+        let mut agg_fields: Vec<Field> = Vec::new();
+
+        for i in 0..self.agg_expr.len() {
+          let expr = &self.agg_expr[i];
+          let field = expr.eval(&tuple);
+          let op = self.ops[i];
+
+          //push twice for avg
+          if op == AggOp::Avg {
+            agg_fields.push(field.clone());
+          }
+
+          agg_fields.push(field.clone());
+        }
+
+        // check if entry exists
+        if let Some(value) = self.map.get(&groupby_fields) {
+          // merge each agg_field
+        }else{
+          // call place field
+        }
+
     }
 }
 
@@ -102,17 +146,23 @@ impl OpIterator for Aggregate {
         if !self.open {
           self.child.open()?;
           self.open = true;
-          self.map = Some(HashMap::new());
+        }
+
+        // iterate over ops and add count behind every Avg op
+        for op in self.ops.iter() {
+          self.ops_other.push(op.clone());
+
+          // put a count behind every avg
+          if *op == AggOp::Avg{
+            self.ops_other.push(AggOp::Count);
+          }
         }
 
         // construct hashmap from each tuple
         while let Some(tuple) = self.child.next()? {
 
-          // get group by fields of tuple in vec
-          let groupby_fields: Vec<Field> = Vec::new();
-          for val in self.groupby_expr.iter(){
-            
-          }
+          self.merge_tuple_into_group(&tuple);
+
         }
 
         Ok(())
