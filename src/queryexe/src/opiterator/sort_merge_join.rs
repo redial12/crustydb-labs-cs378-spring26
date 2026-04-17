@@ -18,7 +18,6 @@ pub struct SortMergeJoin {
     left_child: Box<dyn OpIterator>,
     right_child: Box<dyn OpIterator>,
     will_rewind: bool,
-
     // States (Reset on close)
     // todo!(Add the states you need to maintain here)
 }

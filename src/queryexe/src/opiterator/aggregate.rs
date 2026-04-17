@@ -24,7 +24,7 @@ pub struct Aggregate {
     child: Box<dyn OpIterator>,
     /// If true, then the operator will be rewinded in the future.
     will_rewind: bool,
-    
+
     // States (Need to reset on close)
     open: bool,
     /// map used to aggregate
@@ -37,15 +37,15 @@ pub struct Aggregate {
     index: usize,
 }
 
-  // thoughts: use a hash map to store mapping from groups to values
-  // map a vec of fields to a vec of fields
-  // the map needs to be built in open()
-  // check if a group exists, if so then merge fields.
-  // merge fields by iterating over the values(vec of Fields) from key and calling merge on each one
-  // if group doesnt exist already, call place_fields method (similar to merge)
-  // place_fields will handle the first insertion correctly for each Op, for Avg create an extra field for count
+// thoughts: use a hash map to store mapping from groups to values
+// map a vec of fields to a vec of fields
+// the map needs to be built in open()
+// check if a group exists, if so then merge fields.
+// merge fields by iterating over the values(vec of Fields) from key and calling merge on each one
+// if group doesnt exist already, call place_fields method (similar to merge)
+// place_fields will handle the first insertion correctly for each Op, for Avg create an extra field for count
 
-  //for next() I need to turn the hashmap into tuples
+//for next() I need to turn the hashmap into tuples
 
 impl Aggregate {
     pub fn new(
@@ -58,18 +58,18 @@ impl Aggregate {
     ) -> Self {
         assert!(ops.len() == agg_expr.len());
         Self {
-          managers,
-          groupby_expr,
-          agg_expr,
-          ops,
-          schema,
-          child,
-          open: false,
-          map: HashMap::new(),
-          ops_other: Vec::new(),
-          results: Vec::new(),
-          index: 0,
-          will_rewind: false,
+            managers,
+            groupby_expr,
+            agg_expr,
+            ops,
+            schema,
+            child,
+            open: false,
+            map: HashMap::new(),
+            ops_other: Vec::new(),
+            results: Vec::new(),
+            index: 0,
+            will_rewind: false,
         }
     }
 
@@ -95,7 +95,6 @@ impl Aggregate {
     }
 
     fn place_fields(op: AggOp, field_val: &Field) -> Field {
-      
         match op {
             AggOp::Count => return Field::Int(1),
             AggOp::Max => return field_val.clone(),
@@ -112,46 +111,44 @@ impl Aggregate {
         // get group by fields of tuple in vec
         let mut groupby_fields: Vec<Field> = Vec::new();
 
-        for expr in self.groupby_expr.iter(){
-          let field = expr.eval(&tuple);
-          groupby_fields.push(field.clone());
+        for expr in self.groupby_expr.iter() {
+            let field = expr.eval(&tuple);
+            groupby_fields.push(field.clone());
         }
 
         // get agg fields of tuple in vec
         let mut agg_fields: Vec<Field> = Vec::new();
 
         for i in 0..self.agg_expr.len() {
-          let expr = &self.agg_expr[i];
-          let field = expr.eval(&tuple);
-          let op = self.ops[i];
+            let expr = &self.agg_expr[i];
+            let field = expr.eval(&tuple);
+            let op = self.ops[i];
 
-          //push twice for avg
-          if op == AggOp::Avg {
+            //push twice for avg
+            if op == AggOp::Avg {
+                agg_fields.push(field.clone());
+            }
+
             agg_fields.push(field.clone());
-          }
-
-          agg_fields.push(field.clone());
         }
 
         // check if entry exists
         if let Some(fields) = self.map.get_mut(&groupby_fields) {
-          // merge each agg_field
-          for i in 0..fields.len(){
-            let _ = Self::merge_fields(self.ops_other[i], &agg_fields[i], &mut fields[i]);
-          }
+            // merge each agg_field
+            for i in 0..fields.len() {
+                let _ = Self::merge_fields(self.ops_other[i], &agg_fields[i], &mut fields[i]);
+            }
+        } else {
+            // call place field
+            let mut init_fields: Vec<Field> = Vec::new();
 
-        }else{
-          // call place field
-          let mut init_fields: Vec<Field> = Vec::new();
+            for i in 0..agg_fields.len() {
+                let field = agg_fields[i].clone();
+                init_fields.push(Self::place_fields(self.ops_other[i], &field))
+            }
 
-          for i in 0..agg_fields.len(){
-            let field = agg_fields[i].clone();
-            init_fields.push(Self::place_fields(self.ops_other[i], &field))
-          }
-
-          self.map.insert(groupby_fields, init_fields);
+            self.map.insert(groupby_fields, init_fields);
         }
-
     }
 }
 

@@ -43,17 +43,17 @@ impl HashEqJoin {
         right_child: Box<dyn OpIterator>,
     ) -> Self {
         Self {
-          managers,
-          schema,
-          left_expr,
-          right_expr,
-          left_child,
-          right_child,
-          open: false,
-          current_tuple: None,
-          map: None,
-          current_matches: Vec::new(),
-          match_index: 0,
+            managers,
+            schema,
+            left_expr,
+            right_expr,
+            left_child,
+            right_child,
+            open: false,
+            current_tuple: None,
+            map: None,
+            current_matches: Vec::new(),
+            match_index: 0,
         }
     }
 }
@@ -76,17 +76,27 @@ impl OpIterator for HashEqJoin {
 
             //iterate through right child
             while let Some(right_tuple) = self.right_child.next()? {
+                //evaluate right tuple againt right_expr
+                let right_val = self.right_expr.eval(&right_tuple);
 
-              //evaluate right tuple againt right_expr
-              let right_val = self.right_expr.eval(&right_tuple);
-              
-              //insert vec if empty, then append right tuple
-              self.map.as_mut().unwrap().entry(right_val).or_insert_with(Vec::new).push(right_tuple);
+                //insert vec if empty, then append right tuple
+                self.map
+                    .as_mut()
+                    .unwrap()
+                    .entry(right_val)
+                    .or_insert_with(Vec::new)
+                    .push(right_tuple);
             }
 
             if let Some(left_tuple) = &self.current_tuple {
-              let left_val = self.left_expr.eval(left_tuple);
-              self.current_matches = self.map.as_mut().unwrap().get(&left_val).cloned().unwrap_or_default();
+                let left_val = self.left_expr.eval(left_tuple);
+                self.current_matches = self
+                    .map
+                    .as_mut()
+                    .unwrap()
+                    .get(&left_val)
+                    .cloned()
+                    .unwrap_or_default();
             }
         }
 
@@ -116,7 +126,13 @@ impl OpIterator for HashEqJoin {
             self.current_tuple = self.left_child.next()?;
             if let Some(left_tuple) = &self.current_tuple {
                 let left_val = self.left_expr.eval(left_tuple);
-                self.current_matches = self.map.as_ref().unwrap().get(&left_val).cloned().unwrap_or_default();
+                self.current_matches = self
+                    .map
+                    .as_ref()
+                    .unwrap()
+                    .get(&left_val)
+                    .cloned()
+                    .unwrap_or_default();
             }
             self.match_index = 0;
         }
@@ -137,7 +153,13 @@ impl OpIterator for HashEqJoin {
         self.current_tuple = self.left_child.next()?;
         if let Some(left_tuple) = &self.current_tuple {
             let left_val = self.left_expr.eval(left_tuple);
-            self.current_matches = self.map.as_ref().unwrap().get(&left_val).cloned().unwrap_or_default();
+            self.current_matches = self
+                .map
+                .as_ref()
+                .unwrap()
+                .get(&left_val)
+                .cloned()
+                .unwrap_or_default();
         }
         self.match_index = 0;
         Ok(())
