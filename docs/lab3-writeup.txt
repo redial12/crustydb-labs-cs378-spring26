@@ -1,0 +1,15 @@
+Solutions:
+
+For nested-loop join, I did the typical naive approach that doesn't require much explanation. A nested loop
+evaluates the left and right tuples and compares with an operator before merging.
+
+For hash-join, I created a map of the right child beforehand, and iterated over the left in next().
+There can be multiple matches for a single key, which those tuples are stored in a vec. To come back to this vec,
+rather than a new left value on each next(), an index and the vec must be saved as state/
+
+I used a similar approach for aggregate.rs. I used a hashmap to store unique groupby fields as keys.
+The aggregate fields were stored as values in the map. For Avg, I simply added an extra op behind it
+to keep track of count. After building the map, the entries were collected into sorted vec for deterministic results.
+The index is to keep track of the place in vec for next().
+
+I'd say I spent about 7 hours on this lab, and there was no part I particularly disliked.

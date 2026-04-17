@@ -26,11 +26,15 @@ pub struct Aggregate {
     will_rewind: bool,
     
     // States (Need to reset on close)
-    // todo!("Your code here")
     open: bool,
+    /// map used to aggregate
     map: HashMap<Vec<Field>, Vec<Field>>,
+    /// ops expanded so every Avg is followed by a Count slot
+    ops_other: Vec<AggOp>,
+    /// results collected into here from map
+    results: Vec<Tuple>,
+    /// manages index for next()
     index: usize,
-    ops_other: Vec<AggOp>
 }
 
   // thoughts: use a hash map to store mapping from groups to values
@@ -62,9 +66,10 @@ impl Aggregate {
           child,
           open: false,
           map: HashMap::new(),
-          index: 0,
           ops_other: Vec::new(),
-          will_rewind: true,
+          results: Vec::new(),
+          index: 0,
+          will_rewind: false,
         }
     }
 
@@ -96,7 +101,10 @@ impl Aggregate {
             AggOp::Max => return field_val.clone(),
             AggOp::Min => return field_val.clone(),
             AggOp::Sum => return field_val.clone(),
-            AggOp::Avg => return field_val.clone(),
+            AggOp::Avg => match field_val {
+                Field::Int(v) => return f_decimal(*v as f64),
+                other => return other.clone(),
+            },
         }
     }
 
@@ -126,10 +134,22 @@ impl Aggregate {
         }
 
         // check if entry exists
-        if let Some(value) = self.map.get(&groupby_fields) {
+        if let Some(fields) = self.map.get_mut(&groupby_fields) {
           // merge each agg_field
+          for i in 0..fields.len(){
+            let _ = Self::merge_fields(self.ops_other[i], &agg_fields[i], &mut fields[i]);
+          }
+
         }else{
           // call place field
+          let mut init_fields: Vec<Field> = Vec::new();
+
+          for i in 0..agg_fields.len(){
+            let field = agg_fields[i].clone();
+            init_fields.push(Self::place_fields(self.ops_other[i], &field))
+          }
+
+          self.map.insert(groupby_fields, init_fields);
         }
 
     }
@@ -144,40 +164,75 @@ impl OpIterator for Aggregate {
 
     fn open(&mut self) -> Result<(), CrustyError> {
         if !self.open {
-          self.child.open()?;
-          self.open = true;
+            self.child.open()?;
+            self.open = true;
+
+            // build ops_other: expand each Avg into [Avg, Count]
+            for op in self.ops.iter() {
+                self.ops_other.push(*op);
+                if *op == AggOp::Avg {
+                    self.ops_other.push(AggOp::Count);
+                }
+            }
+
+            // build hashmap
+            while let Some(tuple) = self.child.next()? {
+                self.merge_tuple_into_group(&tuple);
+            }
+
+            // collect, sort by group key, finalize AVG into results
+            let mut entries: Vec<(Vec<Field>, Vec<Field>)> = self.map.drain().collect();
+            entries.sort_by(|(a, _), (b, _)| a.cmp(b));
+
+            for (group_key, agg_vals) in entries {
+                let mut fields = group_key;
+                let mut i = 0;
+                while i < agg_vals.len() {
+                    if self.ops_other[i] == AggOp::Avg {
+                        // agg_vals[i] = sum (Decimal), agg_vals[i+1] = count (Int)
+                        let avg = (agg_vals[i].clone() / agg_vals[i + 1].clone())?;
+                        fields.push(avg);
+                        i += 2;
+                    } else {
+                        fields.push(agg_vals[i].clone());
+                        i += 1;
+                    }
+                }
+                self.results.push(Tuple::new(fields));
+            }
         }
-
-        // iterate over ops and add count behind every Avg op
-        for op in self.ops.iter() {
-          self.ops_other.push(op.clone());
-
-          // put a count behind every avg
-          if *op == AggOp::Avg{
-            self.ops_other.push(AggOp::Count);
-          }
-        }
-
-        // construct hashmap from each tuple
-        while let Some(tuple) = self.child.next()? {
-
-          self.merge_tuple_into_group(&tuple);
-
-        }
-
         Ok(())
     }
 
     fn next(&mut self) -> Result<Option<Tuple>, CrustyError> {
-        todo!("Your code here")
+        if !self.open {
+            panic!("Iterator is not open");
+        }
+        if self.index < self.results.len() {
+            let t = self.results[self.index].clone();
+            self.index += 1;
+            Ok(Some(t))
+        } else {
+            Ok(None)
+        }
     }
 
     fn close(&mut self) -> Result<(), CrustyError> {
-        todo!("Your code here")
+        self.child.close()?;
+        self.open = false;
+        self.index = 0;
+        self.map.clear();
+        self.ops_other.clear();
+        self.results.clear();
+        Ok(())
     }
 
     fn rewind(&mut self) -> Result<(), CrustyError> {
-        todo!("Your code here")
+        if !self.open {
+            panic!("Iterator is not open");
+        }
+        self.index = 0;
+        Ok(())
     }
 
     fn get_schema(&self) -> &TableSchema {
